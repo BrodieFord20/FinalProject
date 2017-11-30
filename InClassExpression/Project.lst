@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/27/17 13:58:49
+Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/28/17 14:02:36
 FinalProjec						     Page 1 - 1
 
 
@@ -103,20 +103,24 @@ Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/27/17 13:58:49
 	   64 61 74 61 3A
 	   20 00
 
- 0000012F 00000000			sizeofData DWORD ?
+ 0000012F 00000000			firstsizeofData DWORD ?
+ 00000133 00000000			sizeofData DWORD ?
 
- 00000133  00000014 [			userData BYTE maxInput DUP (?), 0
+ 00000137  00000014 [			userData BYTE maxInput DUP (?), 0
+	    00
+	   ] 00
+ 0000014C  00000014 [			newData BYTE maxInput DUP (?), 0
 	    00
 	   ] 00
 
- 00000148 64 61 74 61 2E		filename BYTE "data.txt", 0
+ 00000161 64 61 74 61 2E		filename BYTE "data.txt", 0
 	   74 78 74 00
- 00000151 53 45 43 52 45		encryptFile BYTE "SECRETFILE.txt",0
+ 0000016A 53 45 43 52 45		encryptFile BYTE "SECRETFILE.txt",0
 	   54 46 49 4C 45
 	   2E 74 78 74 00
 
 					;Data variables for the file I/O
- 00000160 00000000			fileHandle DWORD ?
+ 00000179 00000000			fileHandle DWORD ?
 
  00000000			.code
  00000000			main PROC
@@ -131,43 +135,40 @@ Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/27/17 13:58:49
 				;Call to allow user to enter data
  00000011  E8 0000004D			call enterData
 
+				;Call to make sure user has no more data to enter
+ 00000016  E8 000000F2			call promptUser
+
 				;Call to write uncrypted message to data file
- 00000016  E8 00000088			call userEnteredMessage
-
-				;Call to encrypt data
- 0000001B  E8 00000069			call encryptData
- 00000020  BA 00000103 R		mov edx, OFFSET encryptDataMsg
-
-				;Call to write encrptyed message to secure file
- 00000025  E8 0000009A			call encrypt
+ 0000001B  E8 0000008F			call userEnteredMessage
+					
+ 00000020  BA 00000119 R		mov edx, OFFSET decryptDataMsg
 
 				;Set text color
- 0000002A  B8 00000004			mov eax, Red
- 0000002F  E8 00000000 E		call SetTextColor
+ 00000025  B8 00000002			mov eax, Green
+ 0000002A  E8 00000000 E		call SetTextColor
+
+				;Call to show decrypted message
+ 0000002F  E8 000000BD			call showData
+
+				;Call to encrypt data
+ 00000034  E8 00000050			call encryptData
+ 00000039  BA 00000103 R		mov edx, OFFSET encryptDataMsg
+
+				;Call to write encrptyed message to secure file
+ 0000003E  E8 0000008D			call encrypt
+
+				;Set text color
+ 00000043  B8 00000004			mov eax, Red
+ 00000048  E8 00000000 E		call SetTextColor
+
 				;Call to show encrypted message
- 00000034  E8 000000AC			call showData
+ 0000004D  E8 0000009F			call showData
 
 					
 				;Call to decrypt data
- 00000039  E8 0000004B			call encryptData
- 0000003E  BA 00000119 R		mov edx, OFFSET decryptDataMsg
-
-				;Set text color
- 00000043  B8 00000002			mov eax, Green
- 00000048  E8 00000000 E		call SetTextColor
-
-				;Call to show decrypted message
- 0000004D  E8 00000093			call showData
+				;call encryptData
 
 
-					;PUT THIS IN THE PROCEDURE AFTER ENCRYPTION
-					;Save registers, Generate choice message, Restore registers
-					;pushad
-					;mov ebx, OFFSET encryptMsg
-					;mov edx, OFFSET choiceMsg
-					;call MsgBoxAsk
-					;Check value of eax to determine what procedure to call (use .IF to check, pass eax to variable if needed)
-					;popad
 
  00000052  B8 0000000F			mov eax, White
  00000057  E8 00000000 E		call SetTextColor
@@ -186,9 +187,9 @@ Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/27/17 13:58:49
  00000069  E8 00000000 E		call WriteString
  0000006E  E8 00000000 E		call Crlf
  00000073  B9 00000014			mov ecx, maxInput ;Max character count
- 00000078  BA 00000133 R		mov edx, OFFSET userData ;Point to this array
+ 00000078  BA 00000137 R		mov edx, OFFSET userData ;Point to this array
  0000007D  E8 00000000 E		call ReadString
- 00000082  A3 0000012F R		mov sizeofData, eax ;Save the length of string entered
+ 00000082  A3 0000012F R		mov firstsizeofData, eax ;Save the length of string entered
  00000087  61				popad
  00000088  C3				ret
  00000089			enterData ENDP
@@ -199,77 +200,97 @@ Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/27/17 13:58:49
 				;Then keeps track of this data
  00000089			encryptData PROC
  00000089  60				pushad 
- 0000008A  8B 0D 0000012F R			mov ecx, sizeofData;Loop counter
- 00000090  BE 00000000				mov esi, 0 ;Index 0 in array
+					;Use the size of data for both user entries to get correct loop counter
+ 0000008A  8B 1D 00000133 R		mov ebx, sizeofData
+ 00000090  01 1D 0000012F R		add firstsizeofData, ebx
+ 00000096  8B 0D 0000012F R			mov ecx, firstsizeofData;Loop counter
+ 0000009C  BE 00000000				mov esi, 0 ;Index 0 in array
 
- 00000095				L1:
- 00000095  80 B6 00000133 R			xor userData[esi], KEY ;Translate a byte
+ 000000A1				L1:
+ 000000A1  80 B6 00000137 R			xor userData[esi], KEY ;Translate a byte
 	   EF
- 0000009C  83 C6 01				add esi, 1 ;Point to next byte
- 0000009F  E2 F4			loop L1
+ 000000A8  83 C6 01				add esi, 1 ;Point to next byte
+ 000000AB  E2 F4			loop L1
 
- 000000A1  61				popad
+ 000000AD  61				popad
 
- 000000A2  C3				ret
- 000000A3			encryptData ENDP
+ 000000AE  C3				ret
+ 000000AF			encryptData ENDP
 
 				;Procedure that creates a file using the defined text file above
 				;Reads in the users entered data using EDX and the limit defined in bufferSize which is stored in ECX
 				;And displays the decrpyted message in the file
 				;Uses EAX, ECX, EDX
- 000000A3			userEnteredMessage PROC
- 000000A3  60			pushad
- 000000A4  BA 00000148 R		mov edx, OFFSET filename
- 000000A9  E8 00000000 E		call CreateOutputFile
- 000000AE  A3 00000160 R		mov fileHandle, eax
- 000000B3  B9 00000014			mov ecx, bufferSize
- 000000B8  BA 00000133 R		mov edx, OFFSET userData
- 000000BD  E8 00000000 E		call WriteToFile
- 000000C2  61			popad
- 000000C3  C3			ret
- 000000C4			userEnteredMessage ENDP
-				;
-				;readData PROC
-				;pushad
-				;	mov edx, 0
-				;	mov ecx, bufferSize
-				;	mov eax, fileHandle
-				;	mov edx, OFFSET newData
-				;	call ReadFromFile
-				;popad
-				;ret
-				;readData ENDP
+ 000000AF			userEnteredMessage PROC
+ 000000AF  60			pushad
+ 000000B0  BA 00000161 R		mov edx, OFFSET filename
+ 000000B5  E8 00000000 E		call CreateOutputFile
+ 000000BA  A3 00000179 R		mov fileHandle, eax
+ 000000BF  B9 00000014			mov ecx, bufferSize
+ 000000C4  BA 00000137 R		mov edx, OFFSET userData
+ 000000C9  E8 00000000 E		call WriteToFile
+ 000000CE  61			popad
+ 000000CF  C3			ret
+ 000000D0			userEnteredMessage ENDP
+
 
 				;Procedure that creates a file using the defined text file above
 				;Takes the users data in through EDX and the limit defined in bufferSize which is stored in ECX
 				;Then displays the encrpyted message in the file
 				;Uses EAX, ECX, EDX
- 000000C4			encrypt PROC
- 000000C4  60			pushad
- 000000C5  BA 00000151 R		mov edx, OFFSET encryptFile
- 000000CA  E8 00000000 E		call CreateOutputFile
- 000000CF  A3 00000160 R		mov fileHandle, eax
- 000000D4  B9 00000014			mov ecx, bufferSize
- 000000D9  BA 00000133 R		mov edx, OFFSET userData
- 000000DE  E8 00000000 E		call WriteToFile
- 000000E3  61			popad
- 000000E4  C3			ret
- 000000E5			encrypt ENDP
+ 000000D0			encrypt PROC
+ 000000D0  60			pushad
+ 000000D1  BA 0000016A R		mov edx, OFFSET encryptFile
+ 000000D6  E8 00000000 E		call CreateOutputFile
+ 000000DB  A3 00000179 R		mov fileHandle, eax
+ 000000E0  B9 00000014			mov ecx, bufferSize
+ 000000E5  BA 00000137 R		mov edx, OFFSET userData
+ 000000EA  E8 00000000 E		call WriteToFile
+ 000000EF  61			popad
+ 000000F0  C3			ret
+ 000000F1			encrypt ENDP
 				;Procedure that takes in data from user and displays it (Encrypted or Decrypted)
 				;Data passed in through EDX
- 000000E5			showData PROC 
- 000000E5  60				pushad
- 000000E6  E8 00000000 E		call WriteString
- 000000EB  BA 00000133 R		mov edx, OFFSET userData ;display buffer
- 000000F0  E8 00000000 E		call WriteString
- 000000F5  E8 00000000 E		call Crlf
- 000000FA  61				popad
- 000000FB  C3				ret
- 000000FC			showData ENDP
+ 000000F1			showData PROC 
+ 000000F1  E8 00000000 E		call WriteString
+ 000000F6  60				pushad
+ 000000F7  BA 00000137 R		mov edx, OFFSET userData ;display buffer
+ 000000FC  E8 00000000 E		call WriteString
+ 00000101  E8 00000000 E		call Crlf
+					;mov edx, OFFSET newData
+					;call WriteString 
+ 00000106  E8 00000000 E		call Crlf
+ 0000010B  61				popad
+ 0000010C  C3				ret
+ 0000010D			showData ENDP
+
+ 0000010D			promptUser PROC
+
+ 0000010D  60			pushad
+ 0000010E  BB 00000065 R		mov ebx, OFFSET encryptMsg
+ 00000113  BA 00000079 R		mov edx, OFFSET choiceMsg
+ 00000118  E8 00000000 E		call MsgBoxAsk
+				;Check value of eax to determine what procedure to call (use .IF to check, pass eax to variable if needed)
+					.IF eax == 6
+ 0000011D  83 F8 06	   *	    cmp    eax, 006h
+ 00000120  75 1A	   *	    jne    @C0001
+ 00000122  B9 00000014				mov ecx, maxInput ;Max character count
+ 00000127  BA 00000137 R			mov edx, OFFSET userData
+ 0000012C  03 15 0000012F R			add edx, firstsizeofData;Point to this array
+ 00000132  E8 00000000 E			call ReadString
+ 00000137  A3 00000133 R			mov sizeofData, eax ;Save the length of string entered
+					.ENDIF
+ 0000013C		   *@C0001:
+ 0000013C  E8 00000000 E		call Crlf
+ 00000141  E8 00000000 E		call WriteToFile
+
+ 00000146  61			popad
+ 00000147  C3			ret
+ 00000148			promptUser ENDP
 
 
 				END main
-Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/27/17 13:58:49
+Microsoft (R) Macro Assembler Version 14.10.25019.0	    11/28/17 14:02:36
 FinalProjec						     Symbols 2 - 1
 
 
@@ -363,8 +384,8 @@ Segments and Groups:
 
 FLAT . . . . . . . . . . . . . .	GROUP
 STACK  . . . . . . . . . . . . .	32 Bit	 00001000 Para	  Stack	  'STACK'	 
-_DATA  . . . . . . . . . . . . .	32 Bit	 00000164 Para	  Public  'DATA'	
-_TEXT  . . . . . . . . . . . . .	32 Bit	 000000FC Para	  Public  'CODE'	
+_DATA  . . . . . . . . . . . . .	32 Bit	 0000017D Para	  Public  'DATA'	
+_TEXT  . . . . . . . . . . . . .	32 Bit	 00000148 Para	  Public  'CODE'	
 
 
 Procedures, parameters, and locals:
@@ -471,15 +492,16 @@ WriteStackFrame  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External
 WriteString  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteToFile  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteWindowsMsg  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
-encryptData  . . . . . . . . . .	P Near	 00000089 _TEXT	Length= 0000001A Public STDCALL
-  L1 . . . . . . . . . . . . . .	L Near	 00000095 _TEXT	
-encrypt  . . . . . . . . . . . .	P Near	 000000C4 _TEXT	Length= 00000021 Public STDCALL
+encryptData  . . . . . . . . . .	P Near	 00000089 _TEXT	Length= 00000026 Public STDCALL
+  L1 . . . . . . . . . . . . . .	L Near	 000000A1 _TEXT	
+encrypt  . . . . . . . . . . . .	P Near	 000000D0 _TEXT	Length= 00000021 Public STDCALL
 enterData  . . . . . . . . . . .	P Near	 00000063 _TEXT	Length= 00000026 Public STDCALL
 main . . . . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 00000063 Public STDCALL
 printf . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+promptUser . . . . . . . . . . .	P Near	 0000010D _TEXT	Length= 0000003B Public STDCALL
 scanf  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
-showData . . . . . . . . . . . .	P Near	 000000E5 _TEXT	Length= 00000017 Public STDCALL
-userEnteredMessage . . . . . . .	P Near	 000000A3 _TEXT	Length= 00000021 Public STDCALL
+showData . . . . . . . . . . . .	P Near	 000000F1 _TEXT	Length= 0000001C Public STDCALL
+userEnteredMessage . . . . . . .	P Near	 000000AF _TEXT	Length= 00000021 Public STDCALL
 wsprintfA  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
 
 
@@ -706,11 +728,12 @@ cyan . . . . . . . . . . . . . .	Number	 00000003h
 decryptDataMsg . . . . . . . . .	Byte	 00000119 _DATA	
 desMsg . . . . . . . . . . . . .	Byte	 00000018 _DATA	
 encryptDataMsg . . . . . . . . .	Byte	 00000103 _DATA	
-encryptFile  . . . . . . . . . .	Byte	 00000151 _DATA	
+encryptFile  . . . . . . . . . .	Byte	 0000016A _DATA	
 encryptMsg . . . . . . . . . . .	Byte	 00000065 _DATA	
 exit . . . . . . . . . . . . . .	Text   	 INVOKE ExitProcess,0
-fileHandle . . . . . . . . . . .	DWord	 00000160 _DATA	
-filename . . . . . . . . . . . .	Byte	 00000148 _DATA	
+fileHandle . . . . . . . . . . .	DWord	 00000179 _DATA	
+filename . . . . . . . . . . . .	Byte	 00000161 _DATA	
+firstsizeofData  . . . . . . . .	DWord	 0000012F _DATA	
 gray . . . . . . . . . . . . . .	Number	 00000008h   
 green  . . . . . . . . . . . . .	Number	 00000002h   
 guideMsg . . . . . . . . . . . .	Byte	 000000CB _DATA	
@@ -722,9 +745,10 @@ lightMagenta . . . . . . . . . .	Number	 0000000Dh
 lightRed . . . . . . . . . . . .	Number	 0000000Ch   
 magenta  . . . . . . . . . . . .	Number	 00000005h   
 maxInput . . . . . . . . . . . .	Number	 00000014h   
+newData  . . . . . . . . . . . .	Byte	 0000014C _DATA	
 red  . . . . . . . . . . . . . .	Number	 00000004h   
-sizeofData . . . . . . . . . . .	DWord	 0000012F _DATA	
-userData . . . . . . . . . . . .	Byte	 00000133 _DATA	
+sizeofData . . . . . . . . . . .	DWord	 00000133 _DATA	
+userData . . . . . . . . . . . .	Byte	 00000137 _DATA	
 welcome  . . . . . . . . . . . .	Byte	 00000000 _DATA	
 white  . . . . . . . . . . . . .	Number	 0000000Fh   
 wsprintf . . . . . . . . . . . .	Text   	 wsprintfA

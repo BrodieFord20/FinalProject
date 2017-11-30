@@ -27,9 +27,11 @@ INCLUDE Irvine32.inc
 	
 	decryptDataMsg BYTE "Your decrypted data: ",0
 
+	firstsizeofData DWORD ?
 	sizeofData DWORD ?
 
 	userData BYTE maxInput DUP (?), 0
+	newData BYTE maxInput DUP (?), 0
 
 	filename BYTE "data.txt", 0
 	encryptFile BYTE "SECRETFILE.txt",0
@@ -50,8 +52,20 @@ main PROC
 ;Call to allow user to enter data
 	call enterData
 
+;Call to make sure user has no more data to enter
+	call promptUser
+
 ;Call to write uncrypted message to data file
 	call userEnteredMessage
+	
+	mov edx, OFFSET decryptDataMsg
+
+;Set text color
+	mov eax, Green
+	call SetTextColor
+
+;Call to show decrypted message
+	call showData
 
 ;Call to encrypt data
 	call encryptData
@@ -63,30 +77,15 @@ main PROC
 ;Set text color
 	mov eax, Red
 	call SetTextColor
+
 ;Call to show encrypted message
 	call showData
 
 	
 ;Call to decrypt data
-	call encryptData
-	mov edx, OFFSET decryptDataMsg
-
-;Set text color
-	mov eax, Green
-	call SetTextColor
-
-;Call to show decrypted message
-	call showData
+;call encryptData
 
 
-	;PUT THIS IN THE PROCEDURE AFTER ENCRYPTION
-	;Save registers, Generate choice message, Restore registers
-	;pushad
-	;mov ebx, OFFSET encryptMsg
-	;mov edx, OFFSET choiceMsg
-	;call MsgBoxAsk
-	;Check value of eax to determine what procedure to call (use .IF to check, pass eax to variable if needed)
-	;popad
 
 	mov eax, White
 	call SetTextColor
@@ -105,7 +104,7 @@ enterData PROC
 	mov ecx, maxInput ;Max character count
 	mov edx, OFFSET userData ;Point to this array
 	call ReadString
-	mov sizeofData, eax ;Save the length of string entered
+	mov firstsizeofData, eax ;Save the length of string entered
 	popad
 	ret
 enterData ENDP
@@ -116,7 +115,10 @@ enterData ENDP
 ;Then keeps track of this data
 encryptData PROC
 	pushad 
-		mov ecx, sizeofData;Loop counter
+	;Use the size of data for both user entries to get correct loop counter
+	mov ebx, sizeofData
+	add firstsizeofData, ebx
+		mov ecx, firstsizeofData;Loop counter
 		mov esi, 0 ;Index 0 in array
 
 	L1:
@@ -144,17 +146,7 @@ pushad
 popad
 ret
 userEnteredMessage ENDP
-;
-;readData PROC
-;pushad
-;	mov edx, 0
-;	mov ecx, bufferSize
-;	mov eax, fileHandle
-;	mov edx, OFFSET newData
-;	call ReadFromFile
-;popad
-;ret
-;readData ENDP
+
 
 ;Procedure that creates a file using the defined text file above
 ;Takes the users data in through EDX and the limit defined in bufferSize which is stored in ECX
@@ -174,14 +166,38 @@ encrypt ENDP
 ;Procedure that takes in data from user and displays it (Encrypted or Decrypted)
 ;Data passed in through EDX
 showData PROC 
-	pushad
 	call WriteString
+	pushad
 	mov edx, OFFSET userData ;display buffer
 	call WriteString
+	call Crlf
+	;mov edx, OFFSET newData
+	;call WriteString 
 	call Crlf
 	popad
 	ret
 showData ENDP
+
+promptUser PROC
+
+pushad
+	mov ebx, OFFSET encryptMsg
+	mov edx, OFFSET choiceMsg
+	call MsgBoxAsk
+;Check value of eax to determine what procedure to call (use .IF to check, pass eax to variable if needed)
+	.IF eax == 6
+		mov ecx, maxInput ;Max character count
+		mov edx, OFFSET userData
+		add edx, firstsizeofData;Point to this array
+		call ReadString
+		mov sizeofData, eax ;Save the length of string entered
+	.ENDIF
+	call Crlf
+	call WriteToFile
+
+popad
+ret
+promptUser ENDP
 
 
 END main
