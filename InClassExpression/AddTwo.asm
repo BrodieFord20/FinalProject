@@ -229,7 +229,29 @@ showData ENDP
 ;/////////////////////////////////////////////////;
 
 promptUser PROC
-
+ 
+ pushad
+ 	mov ebx, OFFSET encryptMsg
+ 	mov edx, OFFSET choiceMsg
+ 	call MsgBoxAsk
+ ;Check value of eax to determine what procedure to call (use .IF to check, pass eax to variable if needed)
+ 	.IF eax == 6
+ 		mov ecx, maxInput ;Max character count
+ 		mov edx, OFFSET userData
+ 		add edx, firstsizeofData;Point to this array
+ 		call ReadString
+ 		mov sizeofData, eax ;Save the length of string entered
+ 	.ENDIF
+ 	call Crlf
+ 	call WriteToFile
+ 
+ popad
+ ret
+ promptUser ENDP
+ 
+ ;////////////////////////////////////////////////;
+ 
+ findPrimes PROC
 	pushad
 	
 	suitableRand:
