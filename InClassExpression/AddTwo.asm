@@ -230,94 +230,72 @@ showData ENDP
 
 promptUser PROC
 
-pushad
-	mov ebx, OFFSET encryptMsg
-	mov edx, OFFSET choiceMsg
-	call MsgBoxAsk
-;Check value of eax to determine what procedure to call (use .IF to check, pass eax to variable if needed)
-	.IF eax == 6
-		mov ecx, maxInput ;Max character count
-		mov edx, OFFSET userData
-		add edx, firstsizeofData;Point to this array
-		call ReadString
-		mov sizeofData, eax ;Save the length of string entered
-	.ENDIF
-	call Crlf
-	call WriteToFile
-
-popad
-ret
-promptUser ENDP
-
-;/////////////////////////////////////////////////;
-
-;///////////////////////////////////////////////////;
-
-;procedure that generates random numbers in desired range and checks for primality WILL NEED TO BE EDITED TO ACCOUNT FOR WORDS AS OPPOSED TO DWORDS
-findPrimes PROC
-
 	pushad
 	
 	suitableRand:
-		call Randomize					; note: not a super secure rng seed.
-		mov eax, EFFFFFFFh
+		call Randomize					; note: not a super secure rng seed, but very little but the algorithm is secure anyways.
+		mov AX, EFh
 		call RandomRange				; prime candidate now in eax
-		add eax, 10000000h
 		test eax, 1						; test if odd, if not, generate another number.
 	jz suitableRand
-	mov primeCandidate, eax
+	add eax, 10h						; shift eax up into desired range (so that it uses around 16 bits)
+	mov primeCandidate, ax
 
-	sub eax, 1h							; get the number r s.t. primeCandidate - 1 = 2^(u) * r
+	sub ax, 1h							; get the number r s.t. primeCandidate - 1 = 2^(u) * r
 	getR:
-		mov ebx, 2h						; algorithm: divide eax by 2, check if there's a remainder. if not,
-		div ebx							; store eax in r, and jump back to division. Repeat until remainder. 
+		mov bx, 2h						; algorithm: divide eax by 2, check if there's a remainder. if not,
+		div bx							; store eax in r, and jump back to division. Repeat until remainder. 
 		test edx, 1						; r guaranteed to be the last complete division.
 		jnz _clear
-		inc u							; increment u
+		inc u							; increment u (initial value = 0)
 		mov r, eax
 	jmp getR
 
 	_clear:
 	mov ecx, 10d						;// security parameter for miller-rabin primality test (s = 10)
-	miller-rabinLoop:
+	millerRabinLoop:
 		call Randomize
-		mov eax, primeCandidate
+		mov ax, primeCandidate
 		sub eax, 4h						; set up selection of a (e) {2, 3, ... , primeCandidate - 2}
 		call RandomRange				; generates number from {0, 1, 2, ... , primeCandidate - 4}
 		add eax, 2h						; bumps up index to desired value
-		mov a, eax
+		mov a, ax
 		mov loopstorage, ecx
 		
 		mov ecx, r						; set up the loop to raise value of a to the power of r
 		
 		powerLoop:
-			mul a						; raises value of a to r power [NOTE: Could overflow into edx, depending on a || NEED TO ACCOUNT FOR]
-		loop powerLoop
+			mul a						; raises value of a to r power [NOTE: Could overflow into edx, depending on a || NEED TO ACCOUNT FOR] <--!! Still a problem.
+		loop powerLoop					; probably solve by setting edx to zero by default and checking to see if a nonzero entry in EDX? Need to review how MUL works.
 		
-		div primeCandidate				; divide by prime candidate
+		div primeCandidate				; divide by prime candidate [NOTE, if the power of a needs to be stored in eax, might need to pad prime candidate to fit.]
 			
-		cmp edx, 1
+		cmp edx, 1						; run a few checks on the result of the division (is mod = 1? primeCandidate - 1? If so, try again.)
 		jz suitableRand
-		cmp edx, primeCandidate - 1		; probably invalid use of register/thingie
+		mov ebx, primeCandidate
+		dec ebx
+		cmp edx, ebx
 		jz suitableRand
-		mov z, edx						; store modulus in z
+		
+		mov z, edx						; If value is good, store modulus in z
 			
-		mov ecx, u
-		sub ecx, 2h
+		mov ecx, u						; 2^u <- this u 
+		dec ecx							; set up to loop u-1 times
 			
 		compositeLoop:
-			mov eax, z 
-			mul eax
+			mov ax, z 
+			mul ax						; might also need to check for overflow here.
 			div primeCandidate
+			;POTENTIAL NEED FOR OVERFLOW MITIGATION STATEMENTS;
 			mov z, edx
 			cmp edx, 1
 			jz suitableRand
 		loop compositeLoop:
-		cmp z, primeCandidate - 1
+		cmp z, ebx						; NOTE: EBX still contains primeCandidate - 1
 		jnz suitableRand
 		
 		mov ecx, loopstorage
-		loop miller-rabinLoop
+		loop millerRabinLoop
 		
 	popad
 	
