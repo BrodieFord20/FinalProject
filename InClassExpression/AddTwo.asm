@@ -39,21 +39,21 @@ INCLUDE Irvine32.inc
 	
 	;; {RSA VARIABLES}
 	; parameters for miller-rabin primality test:
-	primeCandidate DWORD (?)
-	r WORD 0
+	primeCandidate WORD ?
+	r DWORD 1
 	a WORD 0
-	u WORD 0
+	u WORD 1
 	z WORD 0
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
 	
 	; Primes:
-	p WORD (?)	; prime 1 used for key generation
-	q WORD (?)	; prime 2 used for key generation
+	p WORD ?	; prime 1 used for key generation
+	q WORD ?	; prime 2 used for key generation
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%; 
 	
 	;Key Exchange parameters:
 	
-	n DWORD 0
+	n WORD 2 DUP(0)
 	phi_n DWORD 0
 	e DWORD 0
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
@@ -106,6 +106,9 @@ main PROC
 
 ;Call to show decrypted message
 	call showData
+
+; Calls the RSA key generation
+	call RSAkey
 
 ;Call to encrypt data
 	call encryptData
@@ -256,7 +259,7 @@ promptUser PROC
 	
 	suitableRand:
 		call Randomize					; note: not a super secure rng seed, but very little but the algorithm is secure anyways.
-		mov AX, EFh
+		mov AX, 0EFh
 		call RandomRange				; prime candidate now in eax
 		test eax, 1						; test if odd, if not, generate another number.
 	jz suitableRand
@@ -265,9 +268,8 @@ promptUser PROC
 
 	sub ax, 1h							; get the number r s.t. primeCandidate - 1 = 2^(u) * r
 	getR:
-		mov bx, 2h						; algorithm: divide eax by 2, check if there's a remainder. if not,
-		div bx							; store eax in r, and jump back to division. Repeat until remainder. 
-		test edx, 1						; r guaranteed to be the last complete division.
+		shr eax, 1
+		test eax, 1						; r guaranteed to be the last complete division.
 		jnz _clear
 		inc u							; increment u (initial value = 0)
 		mov r, eax
@@ -294,14 +296,14 @@ promptUser PROC
 			
 		cmp edx, 1						; run a few checks on the result of the division (is mod = 1? primeCandidate - 1? If so, try again.)
 		jz suitableRand
-		mov ebx, primeCandidate
+		mov bx, primeCandidate
 		dec ebx
 		cmp edx, ebx
 		jz suitableRand
 		
-		mov z, edx						; If value is good, store modulus in z
+		mov z, dx						; If value is good, store modulus in z
 			
-		mov ecx, u						; 2^u <- this u 
+		mov cx, u						; 2^u <- this u 
 		dec ecx							; set up to loop u-1 times
 			
 		compositeLoop:
@@ -309,19 +311,20 @@ promptUser PROC
 			mul ax						; might also need to check for overflow here.
 			div primeCandidate
 			;POTENTIAL NEED FOR OVERFLOW MITIGATION STATEMENTS;
-			mov z, edx
+			mov z, dx
 			cmp edx, 1
 			jz suitableRand
-		loop compositeLoop:
-		cmp z, ebx						; NOTE: EBX still contains primeCandidate - 1
+		loop compositeLoop
+		cmp z, bx						; NOTE: EBX still contains primeCandidate - 1
 		jnz suitableRand
 		
 		mov ecx, loopstorage
-		loop millerRabinLoop
+		dec ecx
+		jnz millerRabinLoop
 		
 	popad
 	
-	mov eax, primeCandidate
+	mov ax, primeCandidate
 	
 	ret
 
@@ -381,13 +384,13 @@ EEA ENDP
 
 ;////////////////////////////////////////////////////;
 
-RSAenc PROC
+RSAkey PROC
 	
 	call findPrimes
 	mov p, ax							; find a likely prime to stick into p
 	call findPrimes
 	mov q, ax							; find a likely prime to stick into q
-	mul ax, p 							;[!!!!] NOTE: Not sure how to manage numbers larger than 32 bits
+	mul p 							;[!!!!] NOTE: Not sure how to manage numbers larger than 32 bits
 	
 	mov n, dx
 	mov [n+2], ax						; NOTE: Not sure if little/big endian is default. Went with little, I think.
@@ -398,14 +401,14 @@ RSAenc PROC
 	dec bx
 	mul bx
 	
-	mov phi_n, dx						; store phi_n (little endian?)
-	mov [phi_n+2], ax
+	mov phi_n, edx						; store phi_n (little endian?)
+	mov [phi_n+2], eax
 	
 	
 	; COMPUTE E S.T. E REL. PRIME TO PHI_N. USE EXTENDED EUCLIDEAN ALGORITHM. And then we're in business, I think. Just need to run an xor.
 	call EEA
 	
 	
-RSAenc ENDP
+RSAkey ENDP
 
 END main
