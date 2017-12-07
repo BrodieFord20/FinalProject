@@ -53,8 +53,8 @@ INCLUDE Irvine32.inc
 	
 	;Key Exchange parameters:
 	
-	n WORD 2 DUP(0)
-	phi_n DWORD 0
+	n WORD 0
+	phi_n WORD 0
 	e DWORD 0
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
 	
@@ -254,7 +254,7 @@ promptUser PROC
  
  ;////////////////////////////////////////////////;
  
- findPrimes PROC
+ findPrimes PROC						; note: kinda screwed atm.
 	pushad
 	
 	suitableRand:
@@ -267,13 +267,16 @@ promptUser PROC
 	mov primeCandidate, ax
 
 	sub ax, 1h							; get the number r s.t. primeCandidate - 1 = 2^(u) * r
-	getR:
+	getRandU:
 		shr eax, 1
+		mov r, eax
 		test eax, 1						; r guaranteed to be the last complete division.
 		jnz _clear
 		inc u							; increment u (initial value = 0)
-		mov r, eax
-	jmp getR
+	jmp getRandU
+
+	cmp u, 1							; guard against cases where u-1 = 0
+	jz suitableRand
 
 	_clear:
 	mov ecx, 10d						;// security parameter for miller-rabin primality test (s = 10)
@@ -289,13 +292,17 @@ promptUser PROC
 		mov ecx, r						; set up the loop to raise value of a to the power of r
 		
 		powerLoop:
-			mul a						; raises value of a to r power [NOTE: Could overflow into edx, depending on a || NEED TO ACCOUNT FOR] <--!! Still a problem.
+			mul a						; raises value of a to r power [NOTE: Could overflow into edx, depending on a || NEED TO ACCOUNT FOR] Solved by taking mod every time.
+			div primecandidate
+			mov ax, dx
 		loop powerLoop					; probably solve by setting edx to zero by default and checking to see if a nonzero entry in EDX? Need to review how MUL works.
+		sub edx, 0
 		
-		div primeCandidate				; divide by prime candidate [NOTE, if the power of a needs to be stored in eax, might need to pad prime candidate to fit.]
+		;div primeCandidate				; divide by prime candidate [NOTE, if the power of a needs to be stored in eax, might need to pad prime candidate to fit.]
 			
 		cmp edx, 1						; run a few checks on the result of the division (is mod = 1? primeCandidate - 1? If so, try again.)
 		jz suitableRand
+		mov ebx, 0
 		mov bx, primeCandidate
 		dec ebx
 		cmp edx, ebx
@@ -339,16 +346,17 @@ findPrimes ENDP
 EEA PROC
 	generateE:
 		call Randomize
-		mov eax, phi_n
+		mov ax, phi_n
 		sub eax, 2
 		call RandomRange
 		inc eax
 		mov e, eax
 		mov r_1, eax
-		mov [r_i + 4], eax
-		mov ebx, phi_n
+		;mov [r_i + 4], eax
+		mov ebx, 0
+		mov bx, phi_n
 		mov r_0, ebx
-		mov [r_i + 8], ebx
+		;mov [r_i + 8], ebx
 		
 		euclidLoop:
 			;r_i = r_(i-2) mod r_(i-1)
@@ -386,14 +394,14 @@ EEA ENDP
 
 RSAkey PROC
 	
-	call findPrimes
-	mov p, ax							; find a likely prime to stick into p
-	call findPrimes
-	mov q, ax							; find a likely prime to stick into q
-	mul p 							;[!!!!] NOTE: Not sure how to manage numbers larger than 32 bits
+	;call findPrimes
+	mov p, 101							; find a likely prime to stick into p
+	;call findPrimes
+	mov q, 241							; find a likely prime to stick into q
+	mov ax, q
+	mul p 								;[!!!!] NOTE: Not sure how to manage numbers larger than 32 bits
 	
-	mov n, dx
-	mov [n+2], ax						; NOTE: Not sure if little/big endian is default. Went with little, I think.
+	mov n, ax
 	
 	mov ax, p							; compute phi_n = (p-1)(q-1)
 	dec ax
@@ -401,8 +409,7 @@ RSAkey PROC
 	dec bx
 	mul bx
 	
-	mov phi_n, edx						; store phi_n (little endian?)
-	mov [phi_n+2], eax
+	mov phi_n, ax						; store phi_n (little endian?)
 	
 	
 	; COMPUTE E S.T. E REL. PRIME TO PHI_N. USE EXTENDED EUCLIDEAN ALGORITHM. And then we're in business, I think. Just need to run an xor.
