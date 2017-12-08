@@ -263,7 +263,7 @@ promptUser PROC
 		call RandomRange				; prime candidate now in eax
 		test eax, 1						; test if odd, if not, generate another number.
 	jz suitableRand
-	add eax, 10h						; shift eax up into desired range (so that it uses around 16 bits)
+	add eax, 10h						; NOTE: POTENTIAL PROBLEM POINT! shift eax up into desired range (so that it uses around 16 bits)
 	mov primeCandidate, ax
 
 	sub ax, 1h							; get the number r s.t. primeCandidate - 1 = 2^(u) * r
@@ -284,7 +284,7 @@ promptUser PROC
 		call Randomize
 		mov ax, primeCandidate
 		sub eax, 4h						; set up selection of a (e) {2, 3, ... , primeCandidate - 2}
-		call RandomRange				; generates number from {0, 1, 2, ... , primeCandidate - 4}
+		call RandomRange					; generates number from {0, 1, 2, ... , primeCandidate - 4}
 		add eax, 2h						; bumps up index to desired value
 		mov a, ax
 		mov loopstorage, ecx
