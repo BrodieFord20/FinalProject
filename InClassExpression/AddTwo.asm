@@ -62,6 +62,7 @@ INCLUDE Irvine32.inc
 	r_0 WORD 0	; Stores phi_n, then is overwritten with new values
 	r_1 WORD 0	; Stores e, then is overwritten with new values
 	r_i WORD 0
+	qu WORD 0
 	s_0 WORD 0
 	t_0 WORD 0
 	s_1 WORD 0
@@ -352,7 +353,6 @@ EEA PROC
 	pushad
 		mov eax, 0
 		mov edx, 0
-		mov ebx, 0
 
 		call Randomize
 
@@ -372,16 +372,19 @@ EEA PROC
 			div r_1
 			mov r_i, dx
 			
-			mov ax, r_0				; q_(i-1) = (r_(i-2) - r_i)/r_(i-1) || NOTE: q is the value r_0 = q * r_1 + r_i i.e. the number of times r_1 can be multiplied
+			mov ax, r_0				; q_(i-1) = (r_(i-2) - r_i)/r_(i-1) || NOTE: q is the value r_0 = q * r_1 + r_i , i.e. the number of times r_1 can be multiplied
 			sub ax, r_i				;									|| into the value of r_0.
-			div r_1	
+			mov edx, 0				; needs to clear because residual values in edx messing up division
+			div r_1					
+			mov qu, ax				; stores value of q in qu
 			
 			mov ax, r_1				; set r_0 = r_1, r_1 = r_i
 			mov r_0, ax
 			mov ax, r_i
 			mov r_1, ax
 			
-			mul t_1						; make sure no overflow?
+			mov ax, qu
+			mul t_1						
 			mov bx, t_0				; t_i = t_(i-2) - q_(i-1) * t_(i-1)
 			sub bx, ax
 			
