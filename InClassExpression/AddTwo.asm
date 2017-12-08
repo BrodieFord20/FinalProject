@@ -42,7 +42,6 @@ INCLUDE Irvine32.inc
 	primeCandidate WORD ?
 	r DWORD 1
 	a WORD 0
-	u WORD 1
 	z WORD 0
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
 	
@@ -55,7 +54,7 @@ INCLUDE Irvine32.inc
 	
 	n WORD 0
 	phi_n WORD 0
-	e DWORD 0
+	e WORD 0
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
 	
 	; EEA PARAMETERS
@@ -254,17 +253,22 @@ promptUser PROC
  
  ;////////////////////////////////////////////////;
  
- findPrimes PROC						; note: kinda screwed atm.
+ findPrimes PROC						; note: SUPER FIXED!
 	pushad
 	
+	mov eax, 0
+	mov edx, 0
+	call Randomize	
+
 	suitableRand:
-		call Randomize					; note: not a super secure rng seed, but very little but the algorithm is secure anyways.
-		mov AX, 0EFh
+		mov AX, 0FFh
 		call RandomRange				; prime candidate now in eax
 		test eax, 1						; test if odd, if not, generate another number.
 	jz suitableRand
-	add eax, 10h						; NOTE: POTENTIAL PROBLEM POINT! shift eax up into desired range (so that it uses around 16 bits)
-	mov primeCandidate, ax
+
+	;mov ax, 103d						; FOR TESTING PURPOSES
+	mov primeCandidate, ax	
+
 
 	sub ax, 1h							; get the number r s.t. primeCandidate - 1 = 2^(u) * r
 	getRandU:
@@ -272,16 +276,13 @@ promptUser PROC
 		mov r, eax
 		test eax, 1						; r guaranteed to be the last complete division.
 		jnz _clear
-		inc u							; increment u (initial value = 0)
 	jmp getRandU
 
-	cmp u, 1							; guard against cases where u-1 = 0
 	jz suitableRand
 
 	_clear:
 	mov ecx, 10d						;// security parameter for miller-rabin primality test (s = 10)
 	millerRabinLoop:
-		call Randomize
 		mov ax, primeCandidate
 		sub eax, 4h						; set up selection of a (e) {2, 3, ... , primeCandidate - 2}
 		call RandomRange					; generates number from {0, 1, 2, ... , primeCandidate - 4}
@@ -290,46 +291,49 @@ promptUser PROC
 		mov loopstorage, ecx
 		
 		mov ecx, r						; set up the loop to raise value of a to the power of r
+		dec ecx
 		
 		powerLoop:
 			mul a						; raises value of a to r power [NOTE: Could overflow into edx, depending on a || NEED TO ACCOUNT FOR] Solved by taking mod every time.
-			div primecandidate
+			div primeCandidate			; works because (ab) mod n = (a mod n) * (b mod n)
 			mov ax, dx
-		loop powerLoop					; probably solve by setting edx to zero by default and checking to see if a nonzero entry in EDX? Need to review how MUL works.
-		sub edx, 0
-		
-		;div primeCandidate				; divide by prime candidate [NOTE, if the power of a needs to be stored in eax, might need to pad prime candidate to fit.]
-			
-		cmp edx, 1						; run a few checks on the result of the division (is mod = 1? primeCandidate - 1? If so, try again.)
-		jz suitableRand
+		loop powerLoop
+	
+		cmp edx, 1						; run a few checks on the result of the division (is mod = 1? primeCandidate - 1? If so, freaking excellent. Get out of there.)
+		jz yay
+
 		mov ebx, 0
 		mov bx, primeCandidate
 		dec ebx
 		cmp edx, ebx
-		jz suitableRand
+		jz yay
 		
-		mov z, dx						; If value is good, store modulus in z
-			
-		mov cx, u						; 2^u <- this u 
-		dec ecx							; set up to loop u-1 times
-			
+		mov z, dx						; If value hasn't yet been ejected, store modulus in z
+		
 		compositeLoop:
-			mov ax, z 
-			mul ax						; might also need to check for overflow here.
+			cmp r, ebx						; NOTE: EBX still contains primeCandidate - 1
+			jz suitableRand					; stop if r = primecandidate - 1 (multiplies r by 2 each loop, undoing the earlier factoring)
+
+			mov ax, z						; z = z^2 mod primeCandidate
+			mul ax
 			div primeCandidate
-			;POTENTIAL NEED FOR OVERFLOW MITIGATION STATEMENTS;
 			mov z, dx
+
+			shl r, 1						; r = 2*r 
+
 			cmp edx, 1
 			jz suitableRand
+			cmp edx, ebx
+			jz yay
 		loop compositeLoop
-		cmp z, bx						; NOTE: EBX still contains primeCandidate - 1
-		jnz suitableRand
 		
+		yay:
 		mov ecx, loopstorage
 		dec ecx
-		jnz millerRabinLoop
+	jnz millerRabinLoop
 		
 	popad
+
 	
 	mov ax, primeCandidate
 	
@@ -347,19 +351,16 @@ EEA PROC
 	generateE:
 		call Randomize
 		mov ax, phi_n
-		sub eax, 2
+		sub eax, 2						; find a random value in the range [0, phi_n - 2]
 		call RandomRange
-		inc eax
-		mov e, eax
-		mov r_1, eax
-		;mov [r_i + 4], eax
+		inc eax							; bump up value into desired range of [1, phi_n - 1]
+		mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
+		mov r_1, eax						; store e in r_1 as a starting value
 		mov ebx, 0
-		mov bx, phi_n
+		mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
 		mov r_0, ebx
-		;mov [r_i + 8], ebx
 		
 		euclidLoop:
-			;r_i = r_(i-2) mod r_(i-1)
 			mov eax, r_0
 			div r_1
 			mov r_i, edx
@@ -384,6 +385,9 @@ EEA PROC
 			cmp r_1, 0
 		jnz euclidLoop 
 		
+		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_1.]
+		; t = t_1 contains the inverse of r_1 modulo phi_n.
+		; need to test t_1 * r_1 mod phi_n. If output isn't equal to 1, then go and generate another value until you get one that works.
 		; BY END: has modular inverse of e stored in t. 
 		
 		ret
@@ -394,10 +398,15 @@ EEA ENDP
 
 RSAkey PROC
 	
-	;call findPrimes
-	mov p, 101							; find a likely prime to stick into p
-	;call findPrimes
-	mov q, 241							; find a likely prime to stick into q
+	call findPrimes
+	mov p, ax							; find a likely prime to stick into p
+
+	distinctPrime:
+	call findPrimes
+	cmp ax, p
+	jz distinctPrime
+
+	mov q, ax							; find a likely prime to stick into q
 	mov ax, q
 	mul p 								;[!!!!] NOTE: Not sure how to manage numbers larger than 32 bits
 	
@@ -409,7 +418,7 @@ RSAkey PROC
 	dec bx
 	mul bx
 	
-	mov phi_n, ax						; store phi_n (little endian?)
+	mov phi_n, ax						; store phi_n
 	
 	
 	; COMPUTE E S.T. E REL. PRIME TO PHI_N. USE EXTENDED EUCLIDEAN ALGORITHM. And then we're in business, I think. Just need to run an xor.
