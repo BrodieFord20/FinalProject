@@ -59,14 +59,14 @@ INCLUDE Irvine32.inc
 	
 	; EEA PARAMETERS
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
-	r_0 DWORD 0	; Stores phi_n, then is overwritten with new values
-	r_1 DWORD 0	; Stores e, then is overwritten with new values
-	r_i DWORD 0
-	s_0 DWORD 0
-	t_0 DWORD 0
-	s_1 DWORD 0
-	t_1 DWORD 1
-	i DWORD 1
+	r_0 WORD 0	; Stores phi_n, then is overwritten with new values
+	r_1 WORD 0	; Stores e, then is overwritten with new values
+	r_i WORD 0
+	s_0 WORD 0
+	t_0 WORD 0
+	s_1 WORD 0
+	t_1 WORD 1
+	i WORD 1
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
 	loopstorage dword 0 ; <- can change the implementation and will likely be unecessary
 
@@ -349,47 +349,61 @@ findPrimes ENDP
 ; NOTE: For purposes of RSA, s doesn't need to be calculated.
 EEA PROC
 	generateE:
+	pushad
+		mov eax, 0
+		mov edx, 0
+		mov ebx, 0
+
 		call Randomize
+
+		gcdLoop:						; repeats until gcd of random value e and phi_n = 1, saves value of e, and calls it bueno.
 		mov ax, phi_n
 		sub eax, 2						; find a random value in the range [0, phi_n - 2]
 		call RandomRange
 		inc eax							; bump up value into desired range of [1, phi_n - 1]
 		mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
-		mov r_1, eax						; store e in r_1 as a starting value
+		mov r_1, ax						; store e in r_1 as a starting value
 		mov ebx, 0
 		mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
-		mov r_0, ebx
+		mov r_0, bx
 		
 		euclidLoop:
-			mov eax, r_0
+			mov ax, r_0				; r_i = r_(i-2) mod r_(i-1) || NOTE: r_(i-2) is always stored in r_0, r_(i-1) in r_1.
 			div r_1
-			mov r_i, edx
+			mov r_i, dx
 			
-			mov eax, r_0				; q_(i-1) = (r_(i-2) - r_i)/r_(i-1)
-			sub eax, r_i
-			div r_1
+			mov ax, r_0				; q_(i-1) = (r_(i-2) - r_i)/r_(i-1) || NOTE: q is the value r_0 = q * r_1 + r_i i.e. the number of times r_1 can be multiplied
+			sub ax, r_i				;									|| into the value of r_0.
+			div r_1	
 			
-			mov eax, r_1				; set r_0 = r_1, r_1 = r_i
-			mov r_0, eax
-			mov eax, r_i
-			mov r_1, eax
+			mov ax, r_1				; set r_0 = r_1, r_1 = r_i
+			mov r_0, ax
+			mov ax, r_i
+			mov r_1, ax
 			
 			mul t_1						; make sure no overflow?
-			mov ebx, t_0				; t_i = t_(i-2) - q_(i-1) * t_(i-1)
-			sub ebx, eax
+			mov bx, t_0				; t_i = t_(i-2) - q_(i-1) * t_(i-1)
+			sub bx, ax
 			
-			mov eax, t_1				; set t_0 = t_1, t_1 = t_i
-			mov t_0, eax
-			mov t_1, ebx
+			mov ax, t_1				; set t_0 = t_1, t_1 = t_i
+			mov t_0, ax
+			mov t_1, bx
 			
 			cmp r_1, 0
 		jnz euclidLoop 
 		
-		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_1.]
-		; t = t_1 contains the inverse of r_1 modulo phi_n.
-		; need to test t_1 * r_1 mod phi_n. If output isn't equal to 1, then go and generate another value until you get one that works.
+		mov ax, r_0
+		mul bx
+
+		cmp ax, 1
+		jnz gcdLoop
+
+		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_0.]
+		; t = t_1 contains the inverse of r_0 modulo phi_n.
+		; need to test t_1 * r_0 mod phi_n. If output isn't equal to 1, then go and generate another value until you get one that works.
 		; BY END: has modular inverse of e stored in t. 
 		
+		popad
 		ret
 		
 EEA ENDP
