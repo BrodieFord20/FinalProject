@@ -357,17 +357,19 @@ EEA PROC
 		call Randomize
 
 		gcdLoop:						; repeats until gcd of random value e and phi_n = 1, saves value of e, and calls it bueno.
-		mov ax, phi_n
-		sub eax, 2						; find a random value in the range [0, phi_n - 2]
-		call RandomRange
-		inc eax							; bump up value into desired range of [1, phi_n - 1]
-		mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
-		mov r_1, ax						; store e in r_1 as a starting value
-		mov ebx, 0
-		mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
-		mov r_0, bx
+		;mov ax, phi_n
+		;sub eax, 2						; find a random value in the range [0, phi_n - 2]
+		;call RandomRange
+		;inc eax							; bump up value into desired range of [1, phi_n - 1]
+		;mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
+		mov r_1, 3						; store e in r_1 as a starting value 
+		;mov ebx, 0
+		;mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
+		mov r_0, 15
 		
 		euclidLoop:
+			mov eax, 0
+			mov edx, 0
 			mov ax, r_0				; r_i = r_(i-2) mod r_(i-1) || NOTE: r_(i-2) is always stored in r_0, r_(i-1) in r_1.
 			div r_1
 			mov r_i, dx
@@ -385,7 +387,7 @@ EEA PROC
 			
 			mov ax, qu
 			mul t_1						
-			mov bx, t_0				; t_i = t_(i-2) - q_(i-1) * t_(i-1)
+			mov bx, t_0				; t_i = t_(i-2) - q_(i-1) * t_(i-1) NOTE: Since t_0 = 0 and t_1 = 1, this results in a negative number.
 			sub bx, ax
 			
 			mov ax, t_1				; set t_0 = t_1, t_1 = t_i
@@ -395,16 +397,17 @@ EEA PROC
 			cmp r_1, 0
 		jnz euclidLoop 
 		
-		mov ax, r_0
-		mul bx
+		mov ax, r_0					; broken to hell and back.
+		mul t_1
+		div phi_n
 
-		cmp ax, 1
+		cmp dx, 1
 		jnz gcdLoop
 
-		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_0.]
+		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_0.] NOTE: As of this build, gcd works but the inverse value is broken.
 		; t = t_1 contains the inverse of r_0 modulo phi_n.
 		; need to test t_1 * r_0 mod phi_n. If output isn't equal to 1, then go and generate another value until you get one that works.
-		; BY END: has modular inverse of e stored in t. 
+		; BY END: has modular inverse of e stored in t_1 
 		
 		popad
 		ret
