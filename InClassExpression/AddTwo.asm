@@ -63,9 +63,7 @@ INCLUDE Irvine32.inc
 	r_1 WORD 0	; Stores e, then is overwritten with new values
 	r_i WORD 0
 	qu WORD 0
-	s_0 WORD 0
 	t_0 WORD 0
-	s_1 WORD 0
 	t_1 WORD 1
 	i WORD 1
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
@@ -259,11 +257,11 @@ promptUser PROC
 	
 	mov eax, 0
 	mov edx, 0
-	call Randomize	
 
 	suitableRand:
-		mov AX, 0FFh
+		mov ax, 0FCh
 		call RandomRange				; prime candidate now in eax
+		add ax, 3
 		test eax, 1						; test if odd, if not, generate another number.
 	jz suitableRand
 
@@ -337,7 +335,10 @@ promptUser PROC
 
 	
 	mov ax, primeCandidate
-	
+	mov primeCandidate, 0
+	mov r, 1
+	mov a, 0
+	mov z, 0
 	ret
 
 findPrimes ENDP
@@ -354,18 +355,16 @@ EEA PROC
 		mov eax, 0
 		mov edx, 0
 
-		call Randomize
-
 		gcdLoop:						; repeats until gcd of random value e and phi_n = 1, saves value of e, and calls it bueno.
-		;mov ax, phi_n
-		;sub eax, 2						; find a random value in the range [0, phi_n - 2]
-		;call RandomRange
-		;inc eax							; bump up value into desired range of [1, phi_n - 1]
-		;mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
-		mov r_1, 3						; store e in r_1 as a starting value 
-		;mov ebx, 0
-		;mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
-		mov r_0, 15
+		mov ax, phi_n
+		sub eax, 2						; find a random value in the range [0, phi_n - 2]
+		call RandomRange
+		inc eax							; bump up value into desired range of [1, phi_n - 1]
+		mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
+		mov r_1, ax						; store e in r_1 as a starting value 
+		mov ebx, 0
+		mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
+		mov r_0, bx
 		
 		euclidLoop:
 			mov eax, 0
@@ -386,7 +385,7 @@ EEA PROC
 			mov r_1, ax
 			
 			mov ax, qu
-			mul t_1						
+			imul t_1						
 			mov bx, t_0				; t_i = t_(i-2) - q_(i-1) * t_(i-1) NOTE: Since t_0 = 0 and t_1 = 1, this results in a negative number.
 			sub bx, ax
 			
@@ -394,14 +393,10 @@ EEA PROC
 			mov t_0, ax
 			mov t_1, bx
 			
-			cmp r_1, 0
+			xor r_1, 0
 		jnz euclidLoop 
 		
-		mov ax, r_0					; broken to hell and back.
-		mul t_1
-		div phi_n
-
-		cmp dx, 1
+		cmp r_0, 1					; if gcd != 1, get back in there and try again
 		jnz gcdLoop
 
 		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_0.] NOTE: As of this build, gcd works but the inverse value is broken.
@@ -417,14 +412,13 @@ EEA ENDP
 ;////////////////////////////////////////////////////;
 
 RSAkey PROC
-	
+pushad
+
+	call Randomize
 	call findPrimes
 	mov p, ax							; find a likely prime to stick into p
 
-	distinctPrime:
 	call findPrimes
-	cmp ax, p
-	jz distinctPrime
 
 	mov q, ax							; find a likely prime to stick into q
 	mov ax, q
@@ -441,9 +435,11 @@ RSAkey PROC
 	mov phi_n, ax						; store phi_n
 	
 	
-	; COMPUTE E S.T. E REL. PRIME TO PHI_N. USE EXTENDED EUCLIDEAN ALGORITHM. And then we're in business, I think. Just need to run an xor.
+	; COMPUTE E S.T. E REL. PRIME TO PHI_N. USE EXTENDED EUCLIDEAN ALGORITHM. And then we're in business, I think. OH GOD THIS IS HARDER THAN I THOUGHT
 	call EEA
 	
+	popad
+	ret
 	
 RSAkey ENDP
 
