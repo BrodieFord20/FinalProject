@@ -71,7 +71,7 @@ INCLUDE Irvine32.inc
 
 	;Encryption Variables;
 	encryp LABEL DWORD 
-	ecrypA WORD ?
+	encrypA WORD ?
 	encrypB WORD ?
 
 	holder WORD 0
@@ -456,8 +456,9 @@ pushad
 	
 RSAkey ENDP
 
+;////////////////////////////////////////////////;
 
-RSAencryp PROC
+RSAencryp PROC					; Encrypts user data (up to two characters, so good) according to RSA scheme
 	pushad
 
 	mov eax, 0
@@ -471,12 +472,44 @@ RSAencryp PROC
 
 	Loop5:
 		mul holder
-		mov encryp, edx
-		mov encryp + 2, eax
+		mov encrypA, ax
+		mov encrypB, dx
 		mov eax, encryp
-		mov ebx, 0FFh
+		mov ebx, 0FFFFh
 		div ebx
-		mov ax, dx
+		movzx eax, dx
+	Loop Loop5
+	
+	mov userdata, al
+	mov userdata + 1, ah
+	popad
+	ret
+RSAencryp ENDP
+
+END main
+
+;////////////////////////////////////////////////;
+
+RSAdecryp PROC								; decrypts user data according to RSA scheme - NOTE: still needs to read in encrypted data from right place.
+	pushad
+
+	mov eax, 0
+	mov edx, 0
+	mov ecx, 0
+
+	mov ax, word PTR userData
+	mov holder, ax
+
+	mov cx, t_0
+
+	Loop5:
+		mul holder
+		mov encrypA, ax
+		mov encrypB, dx
+		mov eax, encryp
+		mov ebx, 0FFFFh
+		div ebx
+		movzx eax, dx
 	Loop Loop5
 	
 	mov userdata, al
