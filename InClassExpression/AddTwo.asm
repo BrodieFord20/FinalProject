@@ -63,11 +63,18 @@ INCLUDE Irvine32.inc
 	r_1 WORD 0	; Stores e, then is overwritten with new values
 	r_i WORD 0
 	qu WORD 0
-	t_0 WORD 0
-	t_1 WORD 1
+	t_0 SWORD 0
+	t_1 SWORD 1
 	i WORD 1
 	;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%;
 	loopstorage dword 0 ; <- can change the implementation and will likely be unecessary
+
+	;Encryption Variables;
+	encryp LABEL DWORD 
+	ecrypA WORD ?
+	encrypB WORD ?
+
+	holder WORD 0
 
 	;Data variables for the file I/O
 	fileHandle DWORD ?
@@ -109,7 +116,8 @@ main PROC
 	call RSAkey
 
 ;Call to encrypt data
-	call encryptData
+	;call encryptData
+	call RSAencryp 
 	mov edx, OFFSET encryptDataMsg
 
 ;Call to write encrptyed message to secure file
@@ -125,8 +133,6 @@ main PROC
 	
 ;Call to decrypt data
 ;call encryptData
-
-
 
 	mov eax, White
 	call SetTextColor
@@ -355,13 +361,13 @@ EEA PROC
 		mov eax, 0
 		mov edx, 0
 
-		gcdLoop:						; repeats until gcd of random value e and phi_n = 1, saves value of e, and calls it bueno.
+	gcdLoop:						; repeats until gcd of random value e and phi_n = 1, saves value of e, and calls it bueno.
 		mov ax, phi_n
 		sub eax, 2						; find a random value in the range [0, phi_n - 2]
 		call RandomRange
 		inc eax							; bump up value into desired range of [1, phi_n - 1]
-		mov e, ax						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
-		mov r_1, ax						; store e in r_1 as a starting value 
+		mov e, 28213						; store this value as the public exponent e. Need to check whether e and phi_n are relatively prime. 
+		mov r_1, 28213						; store e in r_1 as a starting value 
 		mov ebx, 0
 		mov bx, phi_n					; store phi_n in r_0 as a starting value. (NOTE: r_0 > r_1.)	
 		mov r_0, bx
@@ -397,15 +403,22 @@ EEA PROC
 		jnz euclidLoop 
 		
 		cmp r_0, 1					; if gcd != 1, get back in there and try again
-		jnz gcdLoop
+	jnz gcdLoop
 
-		;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_0.] NOTE: As of this build, gcd works but the inverse value is broken.
-		; t = t_1 contains the inverse of r_0 modulo phi_n.
-		; need to test t_1 * r_0 mod phi_n. If output isn't equal to 1, then go and generate another value until you get one that works.
-		; BY END: has modular inverse of e stored in t_1 
+	;test t_0, 80h
+	;mul t_0
+	;mov ax, r_0
+	;div phi_n
+	;test edx, 1
+	;jnz gcdLoop
+
+	;gcd (r_0, r_1) = r_(i-1) [In terms of implementation, r_0.] NOTE: As of this build, gcd works but the inverse value is broken.
+	; t = t_1 contains the inverse of r_0 modulo phi_n.
+	; need to test t_1 * r_0 mod phi_n. If output isn't equal to 1, then go and generate another value until you get one that works.
+	; BY END: has modular inverse of e stored in t_1 
 		
-		popad
-		ret
+	popad
+	ret
 		
 EEA ENDP
 
@@ -415,12 +428,12 @@ RSAkey PROC
 pushad
 
 	call Randomize
-	call findPrimes
-	mov p, ax							; find a likely prime to stick into p
+	;call findPrimes
+	mov p, 241							; find a likely prime to stick into p
 
-	call findPrimes
+	;call findPrimes
 
-	mov q, ax							; find a likely prime to stick into q
+	mov q, 157							; find a likely prime to stick into q
 	mov ax, q
 	mul p 								;[!!!!] NOTE: Not sure how to manage numbers larger than 32 bits
 	
@@ -442,5 +455,34 @@ pushad
 	ret
 	
 RSAkey ENDP
+
+
+RSAencryp PROC
+	pushad
+
+	mov eax, 0
+	mov edx, 0
+	mov ecx, 0
+
+	mov ax, word PTR userData
+	mov holder, ax
+
+	mov cx, e
+
+	Loop5:
+		mul holder
+		mov encryp, edx
+		mov encryp + 2, eax
+		mov eax, encryp
+		mov ebx, 0FFh
+		div ebx
+		mov ax, dx
+	Loop Loop5
+	
+	mov userdata, al
+	mov userdata + 1, ah
+	popad
+	ret
+RSAencryp ENDP
 
 END main
